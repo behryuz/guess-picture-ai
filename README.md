@@ -1,59 +1,84 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# AI Guesser (Laravel 12)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A tiny Pictionary-style app: draw on the canvas and let AI (Google Gemini via Prism) guess what it is. The UI is a single page with a modern, responsive canvas and an in-page modal for the AI response.
 
-## About Laravel
+## Requirements
+- PHP 8.4+
+- Composer
+- SQLite (recommended for local dev)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+No Node/Vite build is required for local use — the welcome page uses inline CSS.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Quick Start
+1) Clone and install dependencies
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- git clone https://github.com/your-org/demo-pictionary.git
+- cd demo-pictionary
+- composer install
 
-## Learning Laravel
+2) Configure environment
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+- cp .env.example .env  (if .env does not exist)
+- php artisan key:generate
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+3) Database (SQLite)
 
-## Laravel Sponsors
+- Create the database file: touch database/database.sqlite
+- Ensure .env has: DB_CONNECTION=sqlite
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+4) Required tables for this repo's default config
 
-### Premium Partners
+- Generate tables and run migrations:
+  - php artisan session:table
+  - php artisan cache:table
+  - php artisan queue:table
+  - php artisan migrate
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+5) Configure Gemini API key
 
-## Contributing
+- Open .env and set:
+  - GEMINI_API_KEY=your_google_generative_ai_key
+- The provider configuration is in config/prism.php under the gemini section.
+- The controller uses the Gemini model "gemini-3-flash-preview" by default (see app/Http/Controllers/GuessImageController.php). You can change the model there if desired.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+6) Run the app
 
-## Code of Conduct
+- php artisan serve
+- Visit http://127.0.0.1:8000
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## How it works
+- GET / shows the drawing canvas.
+- POST /guess takes your canvas PNG (as a data URL), saves a temporary image, sends it to Gemini via Prism, and returns the guess text that is displayed in a modal.
 
-## Security Vulnerabilities
+Key files:
+- resources/views/welcome.blade.php — UI and canvas logic, modal for results.
+- app/Http/Controllers/GuessImageController.php — Sends the image to Gemini using Prism.
+- config/prism.php — Provider API keys and endpoints (GEMINI_API_KEY is read here).
+- routes/web.php — Routes for / and /guess.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Environment variables
+At minimum, set the following in .env:
+- APP_NAME="AI GUESSER"
+- APP_URL=http://localhost:8000
+- GEMINI_API_KEY=your_google_generative_ai_key
+
+Optional (already present with safe defaults for local dev):
+- DB_CONNECTION=sqlite
+- SESSION_DRIVER=database
+- CACHE_STORE=database
+- QUEUE_CONNECTION=database
+
+Never commit real API keys to version control.
+
+## Testing and code style
+- Run tests: php artisan test
+- Format PHP with Pint: vendor/bin/pint --dirty
+
+## Troubleshooting
+- 403 or CSRF issues on POST /guess: ensure the CSRF token is present and you are posting to the same host shown in APP_URL.
+- 500 response with Prism/Gemini: verify GEMINI_API_KEY is set and valid.
+- Session/cache/queue table errors: re-run the table commands and php artisan migrate.
+- If frontend changes do not appear, try a hard refresh (no npm build is required for this app).
 
 ## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+MIT
