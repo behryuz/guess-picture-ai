@@ -173,9 +173,9 @@
                     <span class="label">Size</span>
                     <input id="size" type="range" min="1" max="24" step="1" value="5" aria-label="Brush size">
                 </div>
-                <div class="group" style="margin-left: auto;">
+                        <div class="group" style="margin-left: auto;">
                     <button id="clear" type="button" class="btn btn-secondary" aria-label="Clear canvas">Clear</button>
-                    <button type="submit" class="btn" aria-label="Submit drawing">Submit</button>
+                    <button id="submitBtn" type="submit" class="btn" aria-label="Submit drawing">Submit</button>
                 </div>
             </div>
 
@@ -218,7 +218,9 @@
         const rect = canvas.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return { x: clientX - rect.left, y: clientY - rect.top };
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
     }
 
     function startDraw(e) {
@@ -264,13 +266,77 @@
     const form = document.getElementById('form');
     const imageInput = document.getElementById('image');
 
+    // Modal helpers
+    const modal = document.createElement('div');
+    modal.id = 'resultModal';
+    modal.innerHTML = `
+      <div style="position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:50;" aria-hidden="true">
+        <div class="backdrop" style="position:absolute; inset:0; background:rgba(2,6,23,.6); backdrop-filter: blur(2px);"></div>
+        <div class="card" role="dialog" aria-modal="true" style="position:relative; width:min(560px, 92vw); padding:20px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <h2 style="margin:0; font-size:20px;">AI Guess</h2>
+                <button type="button" class="btn btn-secondary" id="modalClose">Close</button>
+            </div>
+            <div id="modalBody" style="color:var(--text); line-height:1.6;"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    const modalRoot = modal.firstElementChild;
+    const modalBody = modal.querySelector('#modalBody');
+    const modalClose = modal.querySelector('#modalClose');
+
+    function openModal(content) {
+        modalBody.textContent = content;
+        modalRoot.style.display = 'flex';
+        modalRoot.setAttribute('aria-hidden', 'false');
+    }
+    function closeModal() {
+        modalRoot.style.display = 'none';
+        modalRoot.setAttribute('aria-hidden', 'true');
+    }
+    modalClose.addEventListener('click', closeModal);
+    modalRoot.addEventListener('click', (e) => { if (e.target === modalRoot || e.target.classList.contains('backdrop')) { closeModal(); } });
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); } });
+
+    const submitBtn = document.getElementById('submitBtn');
+
     form.addEventListener('submit', function (e) {
         e.preventDefault();
+
+        // loading state
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Guessing...';
+
         canvas.toBlob(function (blob) {
             const reader = new FileReader();
-            reader.onloadend = function () {
-                imageInput.value = reader.result;
-                form.submit();
+            reader.onloadend = async function () {
+                try {
+                    // Prepare form data for Laravel
+                    const fd = new FormData();
+                    fd.append('image', reader.result);
+                    const tokenInput = document.querySelector('input[name="_token"]');
+                    if (tokenInput) { fd.append('_token', tokenInput.value); }
+
+                    const res = await fetch(form.action, {
+                        method: 'POST',
+                        body: fd,
+                    });
+
+                    if (!res.ok) {
+                        throw new Error('Request failed: ' + res.status + ' ' + res.statusText);
+                    }
+
+                    const text = await res.text();
+                    openModal(text.trim() || 'No answer received.');
+                } catch (err) {
+                    console.error(err);
+                    openModal('Sorry, something went wrong while guessing. Please try again.');
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                }
             };
             reader.readAsDataURL(blob);
         }, 'image/png');
